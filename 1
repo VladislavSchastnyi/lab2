@@ -1,0 +1,109 @@
+#include <iostream>
+#include <atomic>
+
+template <typename T>
+class SharedPtr{
+	//Структура, описывающая ресурс
+	struct SharedResource {
+		T *resource_ptr; //Указатель на ресурс
+		std::atomic_uint ref_count; //Число ссылок на ресурс
+
+		SharedResource () : resource_ptr(new T()), ref_count(1) { } //Инициализация структуры с выделением памяти 
+		
+		void ref_inc() { //Увеличение числа ссылок на ресурс
+			ref_count++;
+		}
+
+		unsigned int ref_dec() { //Уменьшение числа ссылок на ресурс и освобождение памяти под ресурс в случае необходимости
+			ref_count--;
+			if (ref_count == 0) {
+				delete resource_ptr;
+				resource_ptr = nullptr;
+			}
+			return ref_count;
+		}
+
+		T *get() const { //Получение указателя на ресурс
+			return resource_ptr;
+		}
+	};
+
+	SharedResource *resource; //Указатель на структуру, описывающу ресурс
+
+public:
+	SharedPtr(): resource(new SharedResource()) {}; //Инициализация новой структуры
+	SharedPtr(const SharedPtr& r) : resource(r.resource) { resource->ref_inc(); }; //Сохранение указателя на структуру и инкремент ссылок
+	SharedPtr(SharedPtr&& r);  //
+	~SharedPtr() {
+		if (resource->ref_dec() == 0) {
+			delete resource;
+		}
+	}
+	
+	auto operator = (const SharedPtr& r)->SharedPtr& { 
+		resource(r.resource);
+		resource->ref_inc(); 
+	};
+	
+	auto operator = (SharedPtr&& r)->SharedPtr& {
+		resource(r->resource);
+		resource->ref_inc();
+	};
+
+	// проверяет, указывает ли указатель на объект
+	operator bool() const {
+		if (resource.get() == nullptr) {
+			return false;
+		}
+		else {
+			return true;
+		}
+	};
+	
+	auto operator*() const->T& {
+		return *resource->get();
+	};
+	
+	auto operator->() const->T* {
+		return resource->get();
+	};
+
+	auto get()->T* {
+		return resource->get();
+	};
+
+	void reset() {
+		if (resource->ref_dec() == 0) {
+			delete resource;
+		}
+		resource(new SharedResource());
+	};
+	
+	void reset(T* ptr) {
+		if (resource->ref_dec() == 0) {
+			delete resource;
+		}
+		resource(ptr.resource); 
+		resource->ref_inc(); 
+	};
+
+	void swap(SharedPtr& r) {
+		SharedResource *resource_tmp;
+
+		resource_tmp = r->resource;
+		r->resource = resource;
+		resource = resource_tmp;
+	};
+	
+	// возвращает количество объектов SharedPtr, которые ссылаются на тот же управляемый объект
+	auto use_count() const->size_t {
+		return resource->ref_count;
+	};
+};
+
+int main()
+{
+	auto ptr1 = SharedPtr<int>();
+	
+	std::cout << "Hello World!\n"; 
+}
